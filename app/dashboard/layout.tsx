@@ -4,13 +4,23 @@ import { useRouter } from 'next/navigation';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
-  const handleLogout = () => {
-    // Cookie aur localStorage clear karein
-    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    localStorage.removeItem('user');
-    router.push('/');
+  const handleLogout = async () => {
+    try {
+      // Server-side logout call
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      
+      if (res.ok) {
+        // Local state clear karna
+        localStorage.removeItem('user');
+        
+        // Redirect aur full page refresh taake middleware auth check kare
+        router.push('/');
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   };
-
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Updated class: bg-linear-to-r */}
