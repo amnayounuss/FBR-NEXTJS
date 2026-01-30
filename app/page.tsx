@@ -39,7 +39,6 @@ export default function AuthPage() {
 
     const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
     
-    // Login aur Register ke liye alag payload
     const payload = isLogin 
       ? { email: formData.email, password: formData.password } 
       : { 
@@ -63,12 +62,10 @@ export default function AuthPage() {
 
       if (response.ok) {
         if (isLogin) {
-          // --- YE WOH LINES HAIN JO AAPNE PUCHI THI ---
           document.cookie = `token=${result.token}; path=/; max-age=604800; SameSite=Strict`;
           localStorage.setItem('user', JSON.stringify(result.user));
           setAlert({ msg: 'Login successful! Redirecting...', type: 'success' });
           
-          // Dashboard par bhejne ke liye 1 second ka delay
           setTimeout(() => router.push('/dashboard'), 1000);
         } else {
           setAlert({ msg: 'Registration successful! Please login.', type: 'success' });
@@ -78,6 +75,8 @@ export default function AuthPage() {
         setAlert({ msg: result.error || 'Something went wrong', type: 'error' });
       }
     } catch (error) {
+      // 'error' ko console mein use kiya taake 'defined but never used' error khatam ho jaye
+      console.error("Auth error:", error);
       setAlert({ msg: 'Connection error. Please try again.', type: 'error' });
     } finally {
       setLoading(false);
@@ -85,7 +84,8 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center p-4">
+    // Updated class: bg-linear-to-br
+    <div className="min-h-screen bg-linear-to-br from-indigo-600 to-purple-700 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-8">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-800">{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
@@ -103,9 +103,9 @@ export default function AuthPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
             <>
-              <input id="business_name" type="text" placeholder="Business Name" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={handleInputChange} />
-              <input id="ntn" type="text" placeholder="NTN (e.g. 1234567-8)" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={handleInputChange} />
-              <select id="province" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={handleInputChange}>
+              <input id="business_name" type="text" placeholder="Business Name" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900" onChange={handleInputChange} />
+              <input id="ntn" type="text" placeholder="NTN (e.g. 1234567-8)" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900" onChange={handleInputChange} />
+              <select id="province" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900" onChange={handleInputChange}>
                 <option value="">Select Province</option>
                 <option value="Punjab">Punjab</option>
                 <option value="Sindh">Sindh</option>
@@ -116,8 +116,8 @@ export default function AuthPage() {
             </>
           )}
           
-          <input id="email" type="email" placeholder="Email Address" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={handleInputChange} />
-          <input id="password" type="password" placeholder="Password" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" onChange={handleInputChange} />
+          <input id="email" type="email" placeholder="Email Address" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900" onChange={handleInputChange} />
+          <input id="password" type="password" placeholder="Password" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900" onChange={handleInputChange} />
 
           <button 
             type="submit" 

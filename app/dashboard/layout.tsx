@@ -13,12 +13,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <nav className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white p-4 shadow-lg">
+      {/* Updated class: bg-linear-to-r */}
+      <nav className="bg-linear-to-r from-indigo-600 to-purple-700 text-white p-4 shadow-lg">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <h1 className="text-xl font-bold">FBR E-Invoicing</h1>
           <button 
             onClick={handleLogout}
-            className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded transition"
+            className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded transition font-medium"
           >
             Logout
           </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react'; // useEffect hata diya gaya hai
 import { useRouter } from 'next/navigation';
 
 interface InvoiceItem {
@@ -61,6 +61,7 @@ export default function CreateInvoice() {
         alert(result.error || "Failed to save invoice");
       }
     } catch (error) {
+      console.error("Connection Error:", error); // error ko yahan use kar liya
       alert("Error connecting to server");
     } finally {
       setLoading(false);
@@ -68,7 +69,7 @@ export default function CreateInvoice() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-md">
+    <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-md text-gray-900">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">Create New Invoice</h1>
       
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -130,14 +131,14 @@ export default function CreateInvoice() {
                   type="number" 
                   value={item.quantity}
                   className="w-full p-2 border rounded"
-                  onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value))}
+                  onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 0)}
                 />
               </div>
               <div>
                 <button 
                   type="button" 
                   onClick={() => removeItem(index)}
-                  className="text-red-500 text-sm font-bold pb-2"
+                  className="text-red-500 text-sm font-bold pb-2 hover:underline"
                 >
                   Remove
                 </button>
@@ -157,7 +158,7 @@ export default function CreateInvoice() {
           <button 
             type="button" 
             onClick={() => router.back()}
-            className="px-6 py-2 border rounded-lg hover:bg-gray-50"
+            className="px-6 py-2 border rounded-lg hover:bg-gray-50 text-gray-600"
           >
             Cancel
           </button>

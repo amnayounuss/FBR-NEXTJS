@@ -2,24 +2,53 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import jwt from 'jsonwebtoken';
 import { submitInvoiceToFBR } from '@/lib/fbr-service';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
+
+// 1. JWT Payload ke liye interface
+interface AuthUser {
+  user_id: number;
+  tenant_id: number;
+  email: string;
+}
+
+// 2. Tenant Settings ke liye interface
+interface TenantSettings extends RowDataPacket {
+  fbr_sandbox_api_url: string;
+  fbr_sandbox_bearer_token: string;
+  fbr_prod_api_url: string;
+  fbr_prod_bearer_token: string;
+}
+
+// 3. Invoice aur Buyer data ke liye interface
+interface InvoiceRow extends RowDataPacket {
+  id: number;
+  tenant_id: number;
+  buyer_id: number;
+  ntn_cnic: string;
+  buyer_name: string;
+  // Mazeed fields jo aap select kar rahe hain...
+}
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   try {
     const token = req.headers.get('authorization')?.split(' ')[1];
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const decoded: any = jwt.verify(token, process.env.JWT_SECRET!);
+    // decoded ko AuthUser type mein cast karein
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as unknown as AuthUser;
     const invoiceId = params.id;
-    const { environment } = await req.json(); // 'sandbox' or 'production'
+    const { environment } = await req.json() as { environment: 'sandbox' | 'production' };
 
-    // 1. Get Tenant Settings (API URL & Token)
-    const [settings]: any = await db.query(
+    // 1. Get Tenant Settings (Proper Typing ke saath)
+    const [settings] = await db.query<TenantSettings[]>(
       `SELECT fbr_sandbox_api_url, fbr_sandbox_bearer_token, fbr_prod_api_url, fbr_prod_bearer_token 
        FROM tenants WHERE id = ?`,
       [decoded.tenant_id]
     );
 
     const config = settings[0];
+    if (!config) return NextResponse.json({ error: "Tenant settings not found" }, { status: 404 });
+
     const apiUrl = environment === 'production' ? config.fbr_prod_api_url : config.fbr_sandbox_api_url;
     const bearerToken = environment === 'production' ? config.fbr_prod_bearer_token : config.fbr_sandbox_bearer_token;
 
@@ -27,8 +56,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: `FBR ${environment} settings are missing.` }, { status: 400 });
     }
 
-    // 2. Get Invoice & Items Data
-    const [invoices]: any = await db.query(
+    // 2. Get Invoice & Items Data (Proper Typing ke saath)
+    const [invoices] = await db.query<InvoiceRow[]>(
       `SELECT i.*, b.ntn_cnic, b.buyer_name FROM invoices i 
        JOIN buyers b ON i.buyer_id = b.id WHERE i.id = ? AND i.tenant_id = ?`,
       [invoiceId, decoded.tenant_id]
@@ -36,27 +65,28 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     if (!invoices.length) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
-    const [items]: any = await db.query("SELECT * FROM invoice_items WHERE invoice_id = ?", [invoiceId]);
+    const [items] = await db.query<RowDataPacket[]>("SELECT * FROM invoice_items WHERE invoice_id = ?", [invoiceId]);
 
     // 3. Submit to FBR using our Service
     const result = await submitInvoiceToFBR(invoices[0], items, apiUrl, bearerToken);
 
     if (result.success) {
-      // Update Database on Success
-      await db.query(
+      // ResultSetHeader use karein update ke liye
+      await db.query<ResultSetHeader>(
         `UPDATE invoices SET status='APPROVED', fbr_invoice_number=?, fbr_qr_payload=?, submitted_at=NOW() WHERE id=?`,
         [result.data.InvoiceNumber, result.data.QRLink, invoiceId]
       );
       return NextResponse.json({ message: "Successfully submitted to FBR", data: result.data });
     } else {
-      // Update Database on Failure
-      await db.query(
+      await db.query<ResultSetHeader>(
         `UPDATE invoices SET status='REJECTED', rejection_reason=? WHERE id=?`,
         [result.reason?.substring(0, 255), invoiceId]
       );
       return NextResponse.json({ error: "FBR Rejected", details: result.reason }, { status: 400 });
     }
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    // any ki jagah unknown aur Error instance check behtar hai
+    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
