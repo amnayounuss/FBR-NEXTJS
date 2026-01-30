@@ -26,7 +26,20 @@ interface InvoiceRow extends RowDataPacket {
   buyer_id: number;
   ntn_cnic: string;
   buyer_name: string;
-  // Mazeed fields jo aap select kar rahe hain...
+  invoice_date: string;
+  seller_name: string;
+  seller_ntn: string;
+  invoice_type?: string;
+}
+
+// 4. Invoice Item ke liye interface (any se bachne ke liye)
+interface InvoiceItemRow extends RowDataPacket {
+  hs_code: string;
+  product_description: string;
+  quantity: number;
+  rate: number;
+  value_excluding_st?: number;
+  sales_tax_applicable?: number;
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -34,12 +47,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const token = req.headers.get('authorization')?.split(' ')[1];
     if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // decoded ko AuthUser type mein cast karein
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as unknown as AuthUser;
     const invoiceId = params.id;
     const { environment } = await req.json() as { environment: 'sandbox' | 'production' };
 
-    // 1. Get Tenant Settings (Proper Typing ke saath)
+    // 1. Get Tenant Settings
     const [settings] = await db.query<TenantSettings[]>(
       `SELECT fbr_sandbox_api_url, fbr_sandbox_bearer_token, fbr_prod_api_url, fbr_prod_bearer_token 
        FROM tenants WHERE id = ?`,
@@ -56,7 +68,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: `FBR ${environment} settings are missing.` }, { status: 400 });
     }
 
-    // 2. Get Invoice & Items Data (Proper Typing ke saath)
+    // 2. Get Invoice & Items Data
     const [invoices] = await db.query<InvoiceRow[]>(
       `SELECT i.*, b.ntn_cnic, b.buyer_name FROM invoices i 
        JOIN buyers b ON i.buyer_id = b.id WHERE i.id = ? AND i.tenant_id = ?`,
@@ -65,13 +77,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     if (!invoices.length) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
-    const [items] = await db.query<RowDataPacket[]>("SELECT * FROM invoice_items WHERE invoice_id = ?", [invoiceId]);
+    // items ko RowDataPacket ki jagah InvoiceItemRow[] type dein
+    const [items] = await db.query<InvoiceItemRow[]>(
+      "SELECT * FROM invoice_items WHERE invoice_id = ?", 
+      [invoiceId]
+    );
 
     // 3. Submit to FBR using our Service
+    // Ab 'items' ke pass sahi type hai, isliye 'as any[]' likhne ki zaroorat nahi
     const result = await submitInvoiceToFBR(invoices[0], items, apiUrl, bearerToken);
 
     if (result.success) {
-      // ResultSetHeader use karein update ke liye
       await db.query<ResultSetHeader>(
         `UPDATE invoices SET status='APPROVED', fbr_invoice_number=?, fbr_qr_payload=?, submitted_at=NOW() WHERE id=?`,
         [result.data.InvoiceNumber, result.data.QRLink, invoiceId]
@@ -85,7 +101,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: "FBR Rejected", details: result.reason }, { status: 400 });
     }
   } catch (error: unknown) {
-    // any ki jagah unknown aur Error instance check behtar hai
     const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

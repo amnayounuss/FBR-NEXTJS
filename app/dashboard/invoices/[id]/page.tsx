@@ -29,7 +29,6 @@ export default function InvoiceDetail() {
   const id = params.id;
   const router = useRouter();
   
-  // 3. 'any' ki jagah InvoiceData interface use karein
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -44,6 +43,7 @@ export default function InvoiceDetail() {
         const data = await res.json();
         if (res.ok) setInvoice(data);
       } catch (error) {
+        // 'error' ko yahan use kiya taake warning khatam ho jaye
         console.error("Failed to fetch invoice:", error);
       } finally {
         setLoading(false);
@@ -74,6 +74,8 @@ export default function InvoiceDetail() {
         alert("FBR Error: " + (result.details || result.error));
       }
     } catch (error) {
+      // Catch block mein bhi error use karna behtar hai
+      console.error("Submission error:", error);
       alert("Submission failed. Check connection.");
     } finally {
       setSubmitting(false);
@@ -84,7 +86,7 @@ export default function InvoiceDetail() {
   if (!invoice) return <div className="p-10 text-center text-red-500 font-bold">Invoice not found.</div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 p-4">
+    <div className="max-w-4xl mx-auto space-y-6 p-4 text-gray-900">
       <div className="bg-white p-6 rounded-xl shadow-sm flex flex-wrap justify-between items-center border border-gray-100">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Invoice #{invoice.internal_invoice_number}</h1>
@@ -168,7 +170,7 @@ export default function InvoiceDetail() {
       </div>
 
       {invoice.fbr_invoice_number && (
-        <div className="bg-green-50 p-6 rounded-xl border border-green-200 shadow-sm animate-pulse">
+        <div className="bg-green-50 p-6 rounded-xl border border-green-200 shadow-sm">
           <h2 className="text-green-800 font-bold mb-3 flex items-center gap-2">
             ✅ FBR Confirmation
           </h2>
