@@ -3,49 +3,52 @@ import db from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 
+// User search ke liye interface
+interface UserRow extends RowDataPacket {
+  id: number;
+}
+
 export async function POST(req: Request) {
   try {
-    const { business_name, ntn, province, address, contact_email, contact_mobile, password } = await req.json();
+    const { business_name, ntn, email, password } = await req.json();
 
-    if (!business_name || !ntn || !province || !contact_email || !password) {
+    if (!email || !password || !business_name || !ntn) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
 
-    // 1. SELECT query ke liye RowDataPacket[] ka istemal (any ki jagah)
-    const [existing] = await db.query<RowDataPacket[]>("SELECT id FROM tenants WHERE ntn = ?", [ntn]);
-    if (existing.length > 0) {
-      return NextResponse.json({ error: "NTN already registered" }, { status: 400 });
+    // Check if user already exists
+    // [existingUser] ko UserRow[] type di hai
+    const [existingUser] = await db.query<UserRow[]>(
+      'SELECT id FROM users WHERE email = ?', 
+      [email]
+    );
+
+    if (existingUser.length > 0) {
+      return NextResponse.json({ error: "User already exists" }, { status: 400 });
     }
 
-    const password_hash = await bcrypt.hash(password, 10);
-    const conn = await db.getConnection();
-    await conn.beginTransaction();
+    // 1. Create Tenant
+    // INSERT operation ke liye ResultSetHeader use hota hai
+    const [tenantResult] = await db.query<ResultSetHeader>(
+      'INSERT INTO tenants (business_name, ntn, status) VALUES (?, ?, ?)',
+      [business_name, ntn, 'ACTIVE']
+    );
+    const tenantId = tenantResult.insertId;
 
-    try {
-      // 2. INSERT query ke liye ResultSetHeader ka istemal (any ki jagah)
-      const [tRes] = await conn.query<ResultSetHeader>(
-        "INSERT INTO tenants (business_name, ntn, province, address, contact_email, contact_mobile) VALUES (?, ?, ?, ?, ?, ?)",
-        [business_name, ntn, province, address, contact_email, contact_mobile]
-      );
+    // 2. Hash Password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-      await conn.query<ResultSetHeader>(
-        "INSERT INTO users (tenant_id, email, password_hash) VALUES (?, ?, ?)",
-        [tRes.insertId, contact_email, password_hash]
-      );
+    // 3. Create User
+    await db.query<ResultSetHeader>(
+      'INSERT INTO users (tenant_id, email, password_hash) VALUES (?, ?, ?)',
+      [tenantId, email, hashedPassword]
+    );
 
-      await conn.commit();
-      return NextResponse.json({ message: "Registration successful" }, { status: 201 });
-    } catch (err: unknown) {
-      await conn.rollback();
-      // Error type handling
-      const errorMessage = err instanceof Error ? err.message : "Database transaction failed";
-      throw new Error(errorMessage);
-    } finally {
-      conn.release();
-    }
+    return NextResponse.json({ message: "Registration successful" }, { status: 201 });
   } catch (error: unknown) {
-    // 3. Catch block mein unknown type aur instance check ka istemal
-    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    // Error ko 'unknown' rakh kar message nikalna behtar practice hai
+    const errorMessage = error instanceof Error ? error.message : "Unknown database error";
+    console.error("REGISTRATION_ERROR:", error);
+    return NextResponse.json({ error: "Database error: " + errorMessage }, { status: 500 });
   }
 }
