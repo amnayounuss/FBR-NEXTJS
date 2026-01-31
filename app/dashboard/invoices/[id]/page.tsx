@@ -119,7 +119,15 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
 
   const handleSubmit = async (e: React.FormEvent, isDraft: boolean = false) => {
     e.preventDefault();
-    if (!selectedBuyerId) return toast.error("Please select a buyer");
+    
+    // --- CONSOLE ACTION ---
+    console.log("Submit Action Triggered! Type:", isDraft ? "Draft Update" : "FBR Submission");
+    
+    if (!selectedBuyerId) {
+        console.warn("Validation Failed: No Buyer Selected");
+        return toast.error("Please select a buyer");
+    }
+    
     setSubmitting(true);
 
     const buyer = buyers.find(b => b.id.toString() === selectedBuyerId);
@@ -142,7 +150,11 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
       }))
     };
 
+    // --- CONSOLE PAYLOAD ---
+    console.log("Payload Prepared for API:", payload);
+
     try {
+      console.log("Fetching API: PUT /api/invoices/" + resolvedParams.id);
       const res = await fetch(`/api/invoices/${resolvedParams.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -151,17 +163,22 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
 
       const resData = (await res.json()) as BackendResponse;
 
+      // --- CONSOLE RESPONSE ---
+      console.log("API Response Received:", { status: res.status, data: resData });
+
       if (res.ok) {
-        toast.success(isDraft ? "Draft Updated Successfully!" : "Invoice Successfully Submitted to FBR!");
+        toast.success(isDraft ? "Draft Updated Successfully!" : "Invoice Successfully Submitted!");
         router.push("/dashboard/invoices");
       } else {
+        console.error("FBR/Backend Error Message:", resData.error || resData.message);
         toast.error(resData.error || resData.message || "Failed to process invoice");
       }
     } catch (error) {
-      console.error("Submit Error:", error);
+      console.error("Network/Connection Error:", error);
       toast.error("Connection error");
     } finally {
       setSubmitting(false);
+      console.log("Submission process finished.");
     }
   };
 
