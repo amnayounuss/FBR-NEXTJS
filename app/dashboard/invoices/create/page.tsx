@@ -12,24 +12,35 @@ interface Buyer {
 }
 
 interface Item {
+  hsCode: string;
+  prodCode: string;
   name: string;
   qty: number;
   price: number;
+  uoM: string;
   tax_rate: number;
+  discount: number;
+  furtherTax: number;
+  extraTax: number;
 }
 
 export default function CreateInvoice() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
-  const [selectedBuyer, setSelectedBuyer] = useState("");
+  const [selectedBuyerId, setSelectedBuyerId] = useState("");
+
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [invoiceNumber, setInvoiceNumber] = useState(`INV-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [invoiceType, setInvoiceType] = useState("2"); 
+  const [saleType, setSaleType] = useState("T1000017");
+
   const [showAddBuyer, setShowAddBuyer] = useState(false);
-  
-  // New Buyer Form State
   const [newBuyer, setNewBuyer] = useState({ name: "", ntn: "", address: "" });
 
-  // Invoice Items State
-  const [items, setItems] = useState<Item[]>([{ name: "", qty: 1, price: 0, tax_rate: 18 }]);
+  const [items, setItems] = useState<Item[]>([
+    { hsCode: "0000.0000", prodCode: "", name: "", qty: 1, price: 0, uoM: "U1000069", tax_rate: 18, discount: 0, furtherTax: 0, extraTax: 0 }
+  ]);
 
   useEffect(() => {
     fetchBuyers();
@@ -39,53 +50,36 @@ export default function CreateInvoice() {
     try {
       const res = await fetch("/api/buyers");
       const data = await res.json();
-      // Error fix: Ensure data is always an array
-      if (Array.isArray(data)) {
-        setBuyers(data);
-      } else {
-        setBuyers([]);
-      }
+      if (Array.isArray(data)) setBuyers(data);
     } catch (err) {
       console.error("Failed to load buyers", err);
-      setBuyers([]);
     }
   };
 
-  const handleAddBuyer = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Naya buyer save karne ka logic
+  const handleAddBuyer = async () => {
     if (!newBuyer.name || !newBuyer.ntn || !newBuyer.address) {
       return toast.error("Please fill all buyer fields");
     }
-    
+    setLoading(true);
     try {
       const res = await fetch("/api/buyers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newBuyer),
       });
-
-      const result = await res.json();
-
       if (res.ok) {
         toast.success("Buyer added successfully");
-        await fetchBuyers();
-        setSelectedBuyer(result.id.toString());
-        setShowAddBuyer(false);
-        setNewBuyer({ name: "", ntn: "", address: "" });
+        await fetchBuyers(); // List refresh
+        setShowAddBuyer(false); // Form close
+        setNewBuyer({ name: "", ntn: "", address: "" }); // Reset form
       } else {
-        toast.error(result.error || "Failed to add buyer");
+        toast.error("Failed to add buyer");
       }
     } catch (err) {
-      console.error("Add buyer error", err);
-      toast.error("Network error while adding buyer");
-    }
-  };
-
-  const addItem = () => setItems([...items, { name: "", qty: 1, price: 0, tax_rate: 18 }]);
-  
-  const removeItem = (index: number) => {
-    if (items.length > 1) {
-      setItems(items.filter((_, i) => i !== index));
+      toast.error("Error connecting to server");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -95,38 +89,53 @@ export default function CreateInvoice() {
     setItems(newItems);
   };
 
+  const addItem = () => setItems([...items, { hsCode: "0000.0000", prodCode: "", name: "", qty: 1, price: 0, uoM: "U1000069", tax_rate: 18, discount: 0, furtherTax: 0, extraTax: 0 }]);
+  
+  const removeItem = (index: number) => {
+    if (items.length > 1) setItems(items.filter((_, i) => i !== index));
+  };
+
   const calculateSubtotal = () => items.reduce((acc, item) => acc + (item.qty * item.price), 0);
   const calculateTax = () => items.reduce((acc, item) => acc + (item.qty * item.price * (item.tax_rate / 100)), 0);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, isDraft: boolean = false) => {
     e.preventDefault();
-    if (!selectedBuyer) return toast.error("Please select a buyer");
-    
+    if (!selectedBuyerId) return toast.error("Please select a buyer");
     setLoading(true);
-    const subtotal = calculateSubtotal();
-    const tax = calculateTax();
+
+    const buyer = buyers.find(b => b.id.toString() === selectedBuyerId);
+
+    const fbrPayload = {
+      invoiceType: invoiceType === "2" ? "Sale Invoice" : "Purchase Invoice",
+      invoiceDate,
+      invoiceRefNo: invoiceNumber,
+      buyerNTNCNIC: buyer?.ntn,
+      buyerBusinessName: buyer?.name,
+      buyerAddress: buyer?.address,
+      status: isDraft ? "Draft" : "Submitted",
+      items: items.map(item => ({
+        ...item,
+        rate: `${item.tax_rate}%`,
+        totalValues: item.qty * item.price,
+        salesTaxApplicable: (item.qty * item.price) * (item.tax_rate / 100),
+        saleType: saleType
+      }))
+    };
 
     try {
       const res = await fetch("/api/invoices/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          buyer_id: selectedBuyer,
-          items,
-          total_amount: subtotal + tax,
-          tax_amount: tax,
-        }),
+        body: JSON.stringify(fbrPayload),
       });
 
       if (res.ok) {
-        toast.success("Invoice Created Successfully!");
+        toast.success(isDraft ? "Draft Saved!" : "Invoice Submitted to FBR!");
         router.push("/dashboard/invoices");
       } else {
-        const errData = await res.json();
-        toast.error(errData.error || "Failed to save invoice");
+        toast.error("Failed to save invoice");
       }
     } catch (err) {
-      console.error("Submit error", err);
       toast.error("Connection error");
     } finally {
       setLoading(false);
@@ -134,135 +143,193 @@ export default function CreateInvoice() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 bg-white rounded-xl shadow-sm border border-gray-100">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800 border-b pb-4">Create New Invoice</h1>
+    <div className="max-w-[1600px] mx-auto p-4 md:p-8 bg-white min-h-screen">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b pb-6">
+        <div>
+          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Create Invoice</h1>
+          <p className="text-gray-500 mt-1 text-sm">Fill in the details to generate a new FBR compliant invoice.</p>
+        </div>
+        <div className="flex items-center gap-3 bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100">
+          <span className="text-indigo-700 font-semibold">{invoiceNumber}</span>
+        </div>
+      </div>
       
-      <form onSubmit={handleSubmit} className="space-y-8 text-black">
+      <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-10 text-black">
         
-        {/* Buyer Selection Section */}
-        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-700">Buyer / Customer Details</h2>
-            <button 
-              type="button" 
-              onClick={() => setShowAddBuyer(!showAddBuyer)}
-              className="text-sm bg-indigo-50 text-indigo-600 px-3 py-1 rounded-md border border-indigo-200 hover:bg-indigo-100"
-            >
-              {showAddBuyer ? "Cancel" : "+ Add New Buyer"}
+        {/* Invoice Info Section */}
+        <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+          <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+            <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
+            Invoice Meta Information
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice Date</label>
+              <input type="date" className="w-full p-3 border rounded-xl bg-white focus:ring-4 focus:ring-indigo-100 outline-none transition-all" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice Type</label>
+              <select className="w-full p-3 border rounded-xl bg-white focus:ring-4 focus:ring-indigo-100 outline-none transition-all appearance-none" value={invoiceType} onChange={(e) => setInvoiceType(e.target.value)}>
+                <option value="2">Sale Invoice</option>
+                <option value="1">Purchase Invoice</option>
+              </select>
+            </div>
+            <div className="space-y-1.5 lg:col-span-2">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Sale Type</label>
+              <select className="w-full p-3 border rounded-xl bg-white focus:ring-4 focus:ring-indigo-100 outline-none transition-all appearance-none" value={saleType} onChange={(e) => setSaleType(e.target.value)}>
+                <option value="T1000017">Goods at Standard Rate (default)</option>
+                <option value="T1000018">Services</option>
+                <option value="T1000085">Petroleum Products</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        {/* Buyer Selection */}
+        <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
+              Customer Details
+            </h2>
+            <button type="button" onClick={() => setShowAddBuyer(!showAddBuyer)} className="text-sm text-indigo-600 font-bold hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
+              {showAddBuyer ? "← Back to List" : "+ New Customer"}
             </button>
           </div>
 
           {!showAddBuyer ? (
-            <div className="max-w-md">
-              <label className="block text-sm font-medium text-gray-600 mb-1">Select Existing Buyer</label>
-              <select 
-                className="w-full p-2 border rounded-lg text-black bg-white focus:ring-2 focus:ring-indigo-500"
-                value={selectedBuyer}
-                onChange={(e) => setSelectedBuyer(e.target.value)}
-                required={!showAddBuyer}
-              >
-                <option value="">-- Choose Buyer --</option>
-                {Array.isArray(buyers) && buyers.map((buyer) => (
-                  <option key={buyer.id} value={buyer.id}>{buyer.name} ({buyer.ntn})</option>
-                ))}
-              </select>
-            </div>
+            <select className="w-full p-3 border rounded-xl bg-white focus:ring-4 focus:ring-indigo-100 outline-none transition-all" value={selectedBuyerId} onChange={(e) => setSelectedBuyerId(e.target.value)} required>
+              <option value="">-- Choose Existing Buyer --</option>
+              {Array.isArray(buyers) && buyers.map(b => <option key={b.id} value={b.id}>{b.name} ({b.ntn})</option>)}
+            </select>
           ) : (
-            <div className="space-y-4 bg-white p-4 rounded-lg border border-indigo-100">
+            <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input 
-                  type="text" placeholder="Buyer Name" 
-                  className="p-2 border rounded text-black w-full"
-                  value={newBuyer.name} onChange={(e) => setNewBuyer({...newBuyer, name: e.target.value})}
-                />
-                <input 
-                  type="text" placeholder="Buyer NTN" 
-                  className="p-2 border rounded text-black w-full"
-                  value={newBuyer.ntn} onChange={(e) => setNewBuyer({...newBuyer, ntn: e.target.value})}
-                />
+                <input type="text" placeholder="Full Name" className="p-3 border rounded-xl text-black w-full outline-none focus:ring-4 focus:ring-indigo-100" value={newBuyer.name} onChange={(e) => setNewBuyer({...newBuyer, name: e.target.value})} />
+                <input type="text" placeholder="NTN / CNIC" className="p-3 border rounded-xl text-black w-full outline-none focus:ring-4 focus:ring-indigo-100" value={newBuyer.ntn} onChange={(e) => setNewBuyer({...newBuyer, ntn: e.target.value})} />
               </div>
-              <textarea 
-                placeholder="Buyer Address" 
-                className="p-2 border rounded text-black w-full h-20"
-                value={newBuyer.address} onChange={(e) => setNewBuyer({...newBuyer, address: e.target.value})}
-              />
-              <button 
-                type="button" onClick={handleAddBuyer}
-                className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 transition"
-              >
-                Save & Select
-              </button>
+              <textarea placeholder="Complete Business Address" className="p-3 border rounded-xl text-black w-full h-24 outline-none focus:ring-4 focus:ring-indigo-100" value={newBuyer.address} onChange={(e) => setNewBuyer({...newBuyer, address: e.target.value})} />
+              <div className="flex justify-end">
+                <button type="button" onClick={handleAddBuyer} disabled={loading} className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-green-700 transition shadow-lg">
+                   Save Buyer
+                </button>
+              </div>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Items Table Section */}
-        <div className="border rounded-xl overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-800 text-white text-sm">
-              <tr>
-                <th className="p-4 border-b">Item Description</th>
-                <th className="p-4 border-b w-24">Qty</th>
-                <th className="p-4 border-b w-32">Unit Price</th>
-                <th className="p-4 border-b w-24">Tax %</th>
-                <th className="p-4 border-b w-32">Total</th>
-                <th className="p-4 border-b w-16"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, index) => (
-                <tr key={index} className="border-b hover:bg-gray-50 text-black">
-                  <td className="p-3">
-                    <input type="text" placeholder="Product name" className="w-full p-2 border rounded" value={item.name} onChange={(e) => updateItem(index, 'name', e.target.value)} required />
-                  </td>
-                  <td className="p-3">
-                    <input type="number" className="w-full p-2 border rounded" value={item.qty} onChange={(e) => updateItem(index, 'qty', Number(e.target.value))} required />
-                  </td>
-                  <td className="p-3">
-                    <input type="number" className="w-full p-2 border rounded" value={item.price} onChange={(e) => updateItem(index, 'price', Number(e.target.value))} required />
-                  </td>
-                  <td className="p-3">
-                    <input type="number" className="w-full p-2 border rounded" value={item.tax_rate} onChange={(e) => updateItem(index, 'tax_rate', Number(e.target.value))} />
-                  </td>
-                  <td className="p-3 font-semibold">
-                    {(item.qty * item.price).toLocaleString()}
-                  </td>
-                  <td className="p-3">
-                    <button type="button" onClick={() => removeItem(index)} className="text-red-500 hover:text-red-700 font-bold">✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="p-4 bg-gray-50 border-t text-black">
-            <button type="button" onClick={addItem} className="text-indigo-600 font-bold hover:underline">+ Add Row</button>
+        {/* Line Items Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 px-2">
+            <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
+            <h2 className="text-lg font-bold text-gray-800">Line Items</h2>
           </div>
-        </div>
+          
+          <div className="grid grid-cols-1 gap-6">
+            {items.map((item, index) => (
+              <div key={index} className="relative bg-white p-6 rounded-2xl border border-gray-200 shadow-sm animate-in fade-in duration-300">
+                <button type="button" onClick={() => removeItem(index)} className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition-all z-10">✕</button>
 
-        {/* Totals Section */}
-        <div className="flex flex-col items-end space-y-4">
-          <div className="w-72 bg-gray-50 p-4 rounded-xl border space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Subtotal:</span>
-              <span className="font-bold">Rs. {calculateSubtotal().toLocaleString()}</span>
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex-1 min-w-[200px] space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Saved Item</label>
+                    <select className="w-full border rounded-lg p-2 text-sm outline-none bg-gray-50 focus:border-indigo-500">
+                      <option value="">-- Select --</option>
+                    </select>
+                  </div>
+                  <div className="w-[120px] space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</label>
+                    <input className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.hsCode} onChange={(e) => updateItem(index, 'hsCode', e.target.value)} />
+                  </div>
+                  <div className="w-[120px] space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Prod Code</label>
+                    <input className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.prodCode} onChange={(e) => updateItem(index, 'prodCode', e.target.value)} />
+                  </div>
+                  <div className="flex-1 min-w-[250px] space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Description</label>
+                    <input className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.name} onChange={(e) => updateItem(index, 'name', e.target.value)} required />
+                  </div>
+                  <div className="w-[80px] space-y-1 text-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</label>
+                    <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.qty} onChange={(e) => updateItem(index, 'qty', Number(e.target.value))} />
+                  </div>
+                  <div className="w-[100px] space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</label>
+                    <input type="number" className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.price} onChange={(e) => updateItem(index, 'price', Number(e.target.value))} />
+                  </div>
+                  <div className="w-[120px] space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UOM</label>
+                    <select className="w-full border rounded-lg p-2 text-sm outline-none bg-white focus:border-indigo-500" value={item.uoM} onChange={(e) => updateItem(index, 'uoM', e.target.value)}>
+                      <option value="U1000069">Pieces</option>
+                      <option value="U1000013">KG</option>
+                      <option value="U1000003">MT</option>
+                      <option value="U1000009">Liters</option>
+                    </select>
+                  </div>
+                  <div className="w-[80px] space-y-1 text-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tax %</label>
+                    <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.tax_rate} onChange={(e) => updateItem(index, 'tax_rate', Number(e.target.value))} />
+                  </div>
+                  <div className="w-[80px] space-y-1 text-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Disc</label>
+                    <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.discount} onChange={(e) => updateItem(index, 'discount', Number(e.target.value))} />
+                  </div>
+                  <div className="w-[80px] space-y-1 text-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Further</label>
+                    <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.furtherTax} onChange={(e) => updateItem(index, 'furtherTax', Number(e.target.value))} />
+                  </div>
+                  <div className="w-[80px] space-y-1 text-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra</label>
+                    <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.extraTax} onChange={(e) => updateItem(index, 'extraTax', Number(e.target.value))} />
+                  </div>
+                  <div className="flex-grow flex flex-col justify-end items-end min-w-[120px]">
+                    <label className="text-[10px] font-black text-indigo-600 uppercase tracking-wider mb-1">Row Total</label>
+                    <div className="text-lg font-bold text-gray-900">Rs. {(item.qty * item.price).toLocaleString()}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={addItem} className="w-full py-4 border-2 border-dashed border-gray-300 rounded-2xl text-gray-400 font-bold hover:border-indigo-400 hover:text-indigo-400 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2">
+              <span className="text-xl">+</span> Add New Row
+            </button>
+          </div>
+        </section>
+
+        {/* Final Submission Section */}
+        <div className="flex flex-col md:flex-row items-end md:items-start justify-end gap-6 pb-20">
+          <div className="w-full md:w-96 bg-gray-900 text-white p-8 rounded-3xl shadow-2xl space-y-4">
+            <div className="flex justify-between text-gray-400 text-sm">
+              <span>Subtotal Amount</span>
+              <span className="font-mono">Rs. {calculateSubtotal().toLocaleString()}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Sales Tax:</span>
-              <span className="font-bold">Rs. {calculateTax().toLocaleString()}</span>
+            <div className="flex justify-between text-gray-400 text-sm">
+              <span>Sales Tax Total</span>
+              <span className="font-mono">Rs. {calculateTax().toLocaleString()}</span>
             </div>
-            <div className="flex justify-between text-xl border-t pt-2 text-indigo-700">
-              <span>Grand Total:</span>
-              <span className="font-bold">Rs. {(calculateSubtotal() + calculateTax()).toLocaleString()}</span>
+            <div className="h-px bg-white/10 my-2"></div>
+            <div className="flex justify-between items-center">
+              <span className="text-lg font-bold">Total Payable</span>
+              <span className="text-2xl font-black text-indigo-400 font-mono">Rs. {(calculateSubtotal() + calculateTax()).toLocaleString()}</span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 pt-4">
+              <button 
+                type="button" 
+                onClick={(e) => handleSubmit(e, true)}
+                disabled={loading} 
+                className="bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:bg-gray-800"
+              >
+                SAVE DRAFT
+              </button>
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className="bg-indigo-500 hover:bg-indigo-400 text-white py-3 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 disabled:bg-gray-700"
+              >
+                SUBMIT TO FBR
+              </button>
             </div>
           </div>
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full md:w-72 bg-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-indigo-700 transition disabled:bg-gray-400 shadow-lg"
-          >
-            {loading ? "Saving Invoice..." : "Save Invoice"}
-          </button>
         </div>
       </form>
     </div>
