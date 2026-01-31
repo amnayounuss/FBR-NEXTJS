@@ -42,16 +42,17 @@ export default function CreateInvoice() {
     { hsCode: "0000.0000", prodCode: "", name: "", qty: 1, price: 0, uoM: "U1000069", tax_rate: 18, discount: 0, furtherTax: 0, extraTax: 0 }
   ]);
 
+  const fetchBuyers = async () => {
+    try {
+      const res = await fetch("/api/buyers");
+      const data = await res.json();
+      if (Array.isArray(data)) setBuyers(data);
+    } catch (error) {
+      console.error("Failed to load buyers:", error);
+    }
+  };
+
   useEffect(() => {
-    const fetchBuyers = async () => {
-      try {
-        const res = await fetch("/api/buyers");
-        const data = await res.json();
-        if (Array.isArray(data)) setBuyers(data);
-      } catch (err) {
-        console.error("Failed to load buyers", err);
-      }
-    };
     fetchBuyers();
   }, []);
 
@@ -68,16 +69,14 @@ export default function CreateInvoice() {
       });
       if (res.ok) {
         toast.success("Buyer added successfully");
-        const resList = await fetch("/api/buyers");
-        const data = await resList.json();
-        if (Array.isArray(data)) setBuyers(data);
+        await fetchBuyers();
         setShowAddBuyer(false);
         setNewBuyer({ name: "", ntn: "", address: "" });
       } else {
         toast.error("Failed to add buyer");
       }
-    } catch (err) {
-      console.error("Save buyer error", err);
+    } catch (error) {
+      console.error("Save buyer error:", error);
       toast.error("Error connecting to server");
     } finally {
       setLoading(false);
@@ -114,6 +113,8 @@ export default function CreateInvoice() {
       buyerBusinessName: buyer?.name,
       buyerAddress: buyer?.address,
       status: isDraft ? "Draft" : "Submitted",
+      totalAmount: calculateSubtotal() + calculateTax(),
+      taxAmount: calculateTax(),
       items: items.map(item => ({
         ...item,
         rate: `${item.tax_rate}%`,
@@ -131,14 +132,14 @@ export default function CreateInvoice() {
       });
 
       if (res.ok) {
-        toast.success(isDraft ? "Draft Saved!" : "Invoice Submitted to FBR!");
+        toast.success(isDraft ? "Draft Saved Successfully!" : "Invoice Submitted to FBR!");
         router.push("/dashboard/invoices");
       } else {
         const errData = await res.json();
         toast.error(errData.error || "Failed to save invoice");
       }
-    } catch (err) {
-      console.error("Submit error", err);
+    } catch (error) {
+      console.error("Submit error:", error);
       toast.error("Connection error");
     } finally {
       setLoading(false);
@@ -158,7 +159,6 @@ export default function CreateInvoice() {
       </div>
       
       <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-10 text-black">
-        
         <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
           <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
             <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
@@ -253,7 +253,7 @@ export default function CreateInvoice() {
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.qty} onChange={(e) => updateItem(index, 'qty', Number(e.target.value))} />
                   </div>
-                  <div className="w-25 space-y-1">
+                  <div className="w-[100px] space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.price} onChange={(e) => updateItem(index, 'price', Number(e.target.value))} />
                   </div>
@@ -282,7 +282,7 @@ export default function CreateInvoice() {
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.extraTax} onChange={(e) => updateItem(index, 'extraTax', Number(e.target.value))} />
                   </div>
-                  <div className="grow flex flex-col justify-end items-end min-w-30">
+                  <div className="flex-grow flex flex-col justify-end items-end min-w-[120px]">
                     <label className="text-[10px] font-black text-indigo-600 uppercase tracking-wider mb-1">Row Total</label>
                     <div className="text-lg font-bold text-gray-900">Rs. {(item.qty * item.price).toLocaleString()}</div>
                   </div>
@@ -307,7 +307,7 @@ export default function CreateInvoice() {
             </div>
             <div className="h-px bg-white/10 my-2"></div>
             <div className="flex justify-between items-center">
-              <span className="text-lg font-bold">Total</span>
+              <span className="text-lg font-bold">Total Payable</span>
               <span className="text-2xl font-black text-indigo-400 font-mono">Rs. {(calculateSubtotal() + calculateTax()).toLocaleString()}</span>
             </div>
             
@@ -318,14 +318,14 @@ export default function CreateInvoice() {
                 disabled={loading} 
                 className="bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-bold text-sm transition-all active:scale-95 disabled:bg-gray-800"
               >
-                SAVE DRAFT
+                {loading ? "..." : "SAVE DRAFT"}
               </button>
               <button 
                 type="submit" 
                 disabled={loading} 
                 className="bg-indigo-500 hover:bg-indigo-400 text-white py-3 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 disabled:bg-gray-700"
               >
-                SUBMIT TO FBR
+                {loading ? "..." : "SUBMIT TO FBR"}
               </button>
             </div>
           </div>

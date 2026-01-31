@@ -1,89 +1,103 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { toast } from "react-hot-toast";
 
-// 1. Invoice ke liye interface define karein taake 'any' khatam ho jaye
 interface Invoice {
   id: number;
-  internal_invoice_number: string;
+  invoice_ref_no: string;
   buyer_name: string;
+  invoice_date: string;
+  total_amount: number;
   status: string;
 }
 
 export default function InvoicesList() {
-  // 2. State ko Invoice array type dein
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      try {
-        const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
-        const res = await fetch('/api/invoices', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        
-        // Data check aur state update
-        setInvoices(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Failed to fetch invoices:", error);
-      } finally {
-        setLoading(false);
+  // Invoices fetch karne ka function
+  const fetchInvoices = async () => {
+    try {
+      const res = await fetch("/api/invoices");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setInvoices(data);
+      } else {
+        setInvoices([]);
       }
-    };
+    } catch (error) {
+      console.error("Failed to load invoices:", error);
+      toast.error("Could not load invoices");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchInvoices();
   }, []);
 
-  if (loading) return <p className="text-center mt-10 text-gray-600">Loading invoices...</p>;
-
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-      <div className="p-6 border-b flex justify-between items-center bg-white">
-        <h1 className="text-xl font-bold text-gray-800">Recent Invoices</h1>
-        <Link href="/dashboard/invoices/create" className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition">
-          + New Invoice
+    <div className="p-6 max-w-400 mx-auto bg-white min-h-screen">
+      <div className="flex justify-between items-center mb-8 border-b pb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Invoices</h1>
+          <p className="text-sm text-gray-500">Manage your drafts and submitted invoices.</p>
+        </div>
+        <Link 
+          href="/dashboard/invoices/create" 
+          className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 transition shadow-md"
+        >
+          + Create New Invoice
         </Link>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
+
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden text-black">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-gray-50 text-gray-600 text-xs uppercase font-bold border-b">
             <tr>
-              <th className="px-6 py-4">Invoice #</th>
-              <th className="px-6 py-4">Buyer</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">Actions</th>
+              <th className="p-4">Ref No</th>
+              <th className="p-4">Customer</th>
+              <th className="p-4">Date</th>
+              <th className="p-4">Amount</th>
+              <th className="p-4 text-center">Status</th>
+              <th className="p-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {invoices.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-6 py-10 text-center text-gray-500">No invoices found.</td>
-              </tr>
+            {loading ? (
+              <tr><td colSpan={6} className="p-10 text-center text-gray-400">Loading Invoices...</td></tr>
+            ) : invoices.length === 0 ? (
+              <tr><td colSpan={6} className="p-10 text-center text-gray-400">No invoices found. Create your first one!</td></tr>
             ) : (
               invoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 font-medium text-gray-900">{inv.internal_invoice_number}</td>
-                  <td className="px-6 py-4 text-gray-600">{inv.buyer_name}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      inv.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 
-                      inv.status === 'REJECTED' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
+                <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-4 font-medium text-indigo-600">{inv.invoice_ref_no}</td>
+                  <td className="p-4">{inv.buyer_name}</td>
+                  <td className="p-4 text-sm text-gray-500">
+                    {new Date(inv.invoice_date).toLocaleDateString()}
+                  </td>
+                  <td className="p-4 font-mono font-bold">
+                    Rs. {Number(inv.total_amount).toLocaleString()}
+                  </td>
+                  <td className="p-4 text-center">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      inv.status === 'Draft' 
+                        ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                        : 'bg-green-100 text-green-700 border border-green-200'
                     }`}>
                       {inv.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 space-x-4">
-                    <Link href={`/dashboard/invoices/${inv.id}`} className="text-indigo-600 hover:text-indigo-900 font-medium text-sm">
+                  <td className="p-4 text-right">
+                    <Link 
+                      href={`/dashboard/invoices/${inv.id}`} 
+                      className="text-indigo-600 hover:underline font-bold text-sm"
+                    >
                       View Details
                     </Link>
-                    {inv.status === 'DRAFT' && (
-                      <Link href={`/dashboard/invoices/${inv.id}`} className="text-green-600 hover:text-green-900 font-medium text-sm">
-                        Submit
-                      </Link>
-                    )}
                   </td>
                 </tr>
               ))
