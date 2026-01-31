@@ -31,7 +31,7 @@ export default function CreateInvoice() {
   const [selectedBuyerId, setSelectedBuyerId] = useState("");
 
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
-  const [invoiceNumber, setInvoiceNumber] = useState(`INV-${Math.floor(1000 + Math.random() * 9000)}`);
+  const [invoiceNumber] = useState(`INV-${Math.floor(1000 + Math.random() * 9000)}`);
   const [invoiceType, setInvoiceType] = useState("2"); 
   const [saleType, setSaleType] = useState("T1000017");
 
@@ -43,20 +43,18 @@ export default function CreateInvoice() {
   ]);
 
   useEffect(() => {
+    const fetchBuyers = async () => {
+      try {
+        const res = await fetch("/api/buyers");
+        const data = await res.json();
+        if (Array.isArray(data)) setBuyers(data);
+      } catch (err) {
+        console.error("Failed to load buyers", err);
+      }
+    };
     fetchBuyers();
   }, []);
 
-  const fetchBuyers = async () => {
-    try {
-      const res = await fetch("/api/buyers");
-      const data = await res.json();
-      if (Array.isArray(data)) setBuyers(data);
-    } catch (err) {
-      console.error("Failed to load buyers", err);
-    }
-  };
-
-  // Naya buyer save karne ka logic
   const handleAddBuyer = async () => {
     if (!newBuyer.name || !newBuyer.ntn || !newBuyer.address) {
       return toast.error("Please fill all buyer fields");
@@ -70,13 +68,16 @@ export default function CreateInvoice() {
       });
       if (res.ok) {
         toast.success("Buyer added successfully");
-        await fetchBuyers(); // List refresh
-        setShowAddBuyer(false); // Form close
-        setNewBuyer({ name: "", ntn: "", address: "" }); // Reset form
+        const resList = await fetch("/api/buyers");
+        const data = await resList.json();
+        if (Array.isArray(data)) setBuyers(data);
+        setShowAddBuyer(false);
+        setNewBuyer({ name: "", ntn: "", address: "" });
       } else {
         toast.error("Failed to add buyer");
       }
     } catch (err) {
+      console.error("Save buyer error", err);
       toast.error("Error connecting to server");
     } finally {
       setLoading(false);
@@ -136,6 +137,7 @@ export default function CreateInvoice() {
         toast.error("Failed to save invoice");
       }
     } catch (err) {
+      console.error("Submit error", err);
       toast.error("Connection error");
     } finally {
       setLoading(false);
@@ -143,7 +145,7 @@ export default function CreateInvoice() {
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto p-4 md:p-8 bg-white min-h-screen">
+    <div className="max-w-400 mx-auto p-4 md:p-8 bg-white min-h-screen">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b pb-6">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Create Invoice</h1>
@@ -156,7 +158,6 @@ export default function CreateInvoice() {
       
       <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-10 text-black">
         
-        {/* Invoice Info Section */}
         <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
           <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
             <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
@@ -185,7 +186,6 @@ export default function CreateInvoice() {
           </div>
         </section>
 
-        {/* Buyer Selection */}
         <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -218,7 +218,6 @@ export default function CreateInvoice() {
           )}
         </section>
 
-        {/* Line Items Section */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 px-2">
             <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
@@ -231,7 +230,7 @@ export default function CreateInvoice() {
                 <button type="button" onClick={() => removeItem(index)} className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition-all z-10">✕</button>
 
                 <div className="flex flex-wrap gap-4">
-                  <div className="flex-1 min-w-[200px] space-y-1">
+                  <div className="flex-1 min-w-62.5 space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Saved Item</label>
                     <select className="w-full border rounded-lg p-2 text-sm outline-none bg-gray-50 focus:border-indigo-500">
                       <option value="">-- Select --</option>
@@ -245,11 +244,11 @@ export default function CreateInvoice() {
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Prod Code</label>
                     <input className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.prodCode} onChange={(e) => updateItem(index, 'prodCode', e.target.value)} />
                   </div>
-                  <div className="flex-1 min-w-[250px] space-y-1">
+                  <div className="flex-1 min-w-62.5 space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Description</label>
                     <input className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.name} onChange={(e) => updateItem(index, 'name', e.target.value)} required />
                   </div>
-                  <div className="w-[80px] space-y-1 text-center">
+                  <div className="w-20 space-y-1 text-center">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.qty} onChange={(e) => updateItem(index, 'qty', Number(e.target.value))} />
                   </div>
@@ -266,19 +265,19 @@ export default function CreateInvoice() {
                       <option value="U1000009">Liters</option>
                     </select>
                   </div>
-                  <div className="w-[80px] space-y-1 text-center">
+                  <div className="w-20 space-y-1 text-center">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tax %</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.tax_rate} onChange={(e) => updateItem(index, 'tax_rate', Number(e.target.value))} />
                   </div>
-                  <div className="w-[80px] space-y-1 text-center">
+                  <div className="w-20 space-y-1 text-center">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Disc</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.discount} onChange={(e) => updateItem(index, 'discount', Number(e.target.value))} />
                   </div>
-                  <div className="w-[80px] space-y-1 text-center">
+                  <div className="w-20 space-y-1 text-center">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Further</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.furtherTax} onChange={(e) => updateItem(index, 'furtherTax', Number(e.target.value))} />
                   </div>
-                  <div className="w-[80px] space-y-1 text-center">
+                  <div className="w-20 space-y-1 text-center">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.extraTax} onChange={(e) => updateItem(index, 'extraTax', Number(e.target.value))} />
                   </div>
@@ -295,11 +294,10 @@ export default function CreateInvoice() {
           </div>
         </section>
 
-        {/* Final Submission Section */}
         <div className="flex flex-col md:flex-row items-end md:items-start justify-end gap-6 pb-20">
           <div className="w-full md:w-96 bg-gray-900 text-white p-8 rounded-3xl shadow-2xl space-y-4">
             <div className="flex justify-between text-gray-400 text-sm">
-              <span>Subtotal Amount</span>
+              <span>Total Excl. Tax</span>
               <span className="font-mono">Rs. {calculateSubtotal().toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-gray-400 text-sm">
@@ -308,7 +306,7 @@ export default function CreateInvoice() {
             </div>
             <div className="h-px bg-white/10 my-2"></div>
             <div className="flex justify-between items-center">
-              <span className="text-lg font-bold">Total Payable</span>
+              <span className="text-lg font-bold">Total</span>
               <span className="text-2xl font-black text-indigo-400 font-mono">Rs. {(calculateSubtotal() + calculateTax()).toLocaleString()}</span>
             </div>
             
