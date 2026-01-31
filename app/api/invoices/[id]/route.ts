@@ -3,67 +3,37 @@ import db from '@/lib/db';
 import jwt from 'jsonwebtoken';
 import { RowDataPacket } from 'mysql2';
 
-// 1. JWT Payload ke liye interface
-interface AuthUser {
-  user_id: number;
-  tenant_id: number;
-  email: string;
-}
-
-// 2. Invoice aur Buyer data ke liye interface (RowDataPacket extend karna zaroori hai)
-interface InvoiceRow extends RowDataPacket {
-  id: number;
-  tenant_id: number;
-  buyer_id: number;
-  buyer_name: string;
-  ntn_cnic: string;
-  internal_invoice_number: string;
-  invoice_date: Date;
-  status: string;
-}
-
-// 3. Invoice items ke liye interface
-interface InvoiceItem extends RowDataPacket {
-  id: number;
-  invoice_id: number;
-  hs_code: string;
-  product_description: string;
-  quantity: number;
-  rate: number;
-}
-
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const token = req.headers.get('authorization')?.split(' ')[1];
-    if (!token) throw new Error("No token provided");
+    const { id } = await params;
+    const cookieHeader = req.headers.get('cookie');
+    const token = cookieHeader?.split('token=')[1]?.split(';')[0];
 
-    // Decoded token ko AuthUser type mein cast karein
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as unknown as AuthUser;
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
+    jwt.verify(token, process.env.JWT_SECRET || 'secret_123');
 
-    // 4. Query mein InvoiceRow[] ka istemal karein (any ki jagah)
-    const [invoices] = await db.query<InvoiceRow[]>(
-      `SELECT i.*, b.buyer_name, b.ntn_cnic FROM invoices i 
-       JOIN buyers b ON i.buyer_id = b.id 
-       WHERE i.id = ? AND i.tenant_id = ?`,
-      [params.id, decoded.tenant_id]
-    );
-
-    if (!invoices.length) {
+    // Fetch Invoice
+    const [invoices] = await db.query<RowDataPacket[]>("SELECT * FROM invoices WHERE id = ?", [id]);
+    
+    if (invoices.length === 0) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // 5. Items query mein InvoiceItem[] ka istemal karein
-    const [items] = await db.query<InvoiceItem[]>(
-      "SELECT * FROM invoice_items WHERE invoice_id = ?", 
-      [params.id]
-    );
-    
-    const invoiceData = { ...invoices[0], items };
-    return NextResponse.json(invoiceData);
+    // Fetch Items
+    const [items] = await db.query<RowDataPacket[]>("SELECT * FROM invoice_items WHERE invoice_id = ?", [id]);
 
-  } catch (error: unknown) {
-    // 6. Catch block mein 'any' ki jagah 'unknown' behtar practice hai
-    const errorMessage = error instanceof Error ? error.message : "Unauthorized";
-    return NextResponse.json({ error: errorMessage }, { status: 401 });
+    return NextResponse.json({ ...invoices[0], items });
+    
+  } catch (error) {
+    // Error ko console mein log karne se warning khatam ho jayegi aur debugging aasaan hogi
+    console.error("View Invoice API Error:", error);
+    
+    return NextResponse.json(
+      { error: "Server Error" }, 
+      { status: 500 }
+    );
   }
 }
