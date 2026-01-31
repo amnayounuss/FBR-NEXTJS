@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
+import Link from "next/link";
 
 interface Buyer {
   id: number;
@@ -24,17 +25,18 @@ interface Item {
   extraTax: number;
 }
 
+// Interface for Database response mapping
 interface DbInvoiceItem {
   hs_code: string;
   product_code: string;
   description: string;
-  quantity: string | number;
-  price: string | number;
+  quantity: number | string;
+  price: number | string;
   uom: string;
-  tax_rate: string | number;
-  discount?: string | number;
-  further_tax?: string | number;
-  extra_tax?: string | number;
+  tax_rate: number | string;
+  discount?: number | string;
+  further_tax?: number | string;
+  extra_tax?: number | string;
 }
 
 export default function UpdateInvoice({ params }: { params: Promise<{ id: string }> }) {
@@ -68,7 +70,6 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
           setStatus(data.status);
           setInvoiceType(data.invoice_type === "Sale Invoice" ? "2" : "1");
           
-          // Fixed: Explicit type mapping instead of 'any'
           setItems(data.items.map((it: DbInvoiceItem) => ({
             hsCode: it.hs_code || "0000.0000",
             prodCode: it.product_code || "",
@@ -86,7 +87,7 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
           if (matchedBuyer) setSelectedBuyerId(matchedBuyer.id.toString());
         }
       } catch (err) {
-        console.error("Load Error:", err); 
+        console.error("Load Error:", err);
         toast.error("Failed to load invoice details");
       } finally {
         setLoading(false);
@@ -141,8 +142,10 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
       });
 
       if (res.ok) {
-        toast.success(isDraft ? "Draft Updated!" : "Invoice Submitted to FBR!");
+        toast.success(isDraft ? "Draft Updated Successfully!" : "Invoice Submitted to FBR!");
         router.push("/dashboard/invoices");
+      } else {
+        toast.error("Failed to update invoice");
       }
     } catch (error) {
       console.error("Submit Error:", error);
@@ -167,7 +170,6 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
       </div>
       
       <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-10 text-black">
-        {/* Meta Section */}
         <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
           <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
             <span className="w-2 h-6 bg-indigo-600 rounded-full"></span> Invoice Meta Information
@@ -175,7 +177,7 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice Date</label>
-              <input type="date" className="w-full p-3 border rounded-xl bg-white focus:ring-4 focus:ring-indigo-100 outline-none transition-all" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} disabled={!isEditable} />
+              <input type="date" className="w-full p-3 border rounded-xl bg-white focus:ring-4 focus:ring-indigo-100 outline-none transition-all" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} disabled={!isEditable} required />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Invoice Type</label>
@@ -195,7 +197,6 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
           </div>
         </section>
 
-        {/* Customer Section */}
         <section className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
           <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
             <span className="w-2 h-6 bg-indigo-600 rounded-full"></span> Customer Details
@@ -206,7 +207,6 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
           </select>
         </section>
 
-        {/* Line Items Section */}
         <section className="space-y-4">
           <div className="flex items-center gap-2 px-2">
             <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
@@ -287,29 +287,14 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
             <div className="flex justify-between items-center"><span className="text-lg font-bold">Total Payable</span><span className="text-2xl font-black text-indigo-400 font-mono">Rs. {(calculateSubtotal() + calculateTax()).toLocaleString()}</span></div>
             
             <div className="grid grid-cols-2 gap-3 pt-4">
-              <button 
-                type="button" 
-                onClick={(e) => handleSubmit(e, true)}
-                disabled={submitting || !isEditable} 
-                className="bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-bold text-sm active:scale-95 disabled:opacity-50"
-              >
+              <button type="button" onClick={(e) => handleSubmit(e, true)} disabled={submitting || !isEditable} className="bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl font-bold text-sm active:scale-95 disabled:opacity-50">
                 {submitting ? "..." : "UPDATE DRAFT"}
               </button>
-              <button 
-                type="submit" 
-                disabled={submitting || !isEditable} 
-                className="bg-indigo-500 hover:bg-indigo-400 text-white py-3 rounded-xl font-bold text-sm shadow-lg active:scale-95 disabled:opacity-50"
-              >
+              <button type="submit" disabled={submitting || !isEditable} className="bg-indigo-500 hover:bg-indigo-400 text-white py-3 rounded-xl font-bold text-sm shadow-lg active:scale-95 disabled:opacity-50">
                 {submitting ? "..." : "SUBMIT TO FBR"}
               </button>
             </div>
-            <button 
-              type="button"
-              onClick={() => router.push("/dashboard/invoices")} 
-              className="w-full text-center text-sm text-gray-500 hover:text-white pt-2 font-bold transition-all"
-            >
-              ← Back to Invoices
-            </button>
+            <Link href="/dashboard/invoices" className="block text-center text-sm text-gray-500 hover:text-white pt-2 font-bold transition-all">← Back to Invoices</Link>
           </div>
         </div>
       </form>
