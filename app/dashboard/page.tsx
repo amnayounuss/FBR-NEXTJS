@@ -2,18 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
-// 1. User ke liye interface define karein
+// User ke liye interface
 interface UserData {
   business_name: string;
   ntn: string;
   email: string;
+  logo?: string; 
 }
 
 export default function DashboardPage() {
-  // 2. Lazy Initialization: useState ke andar hi function pass karein
   const [user, setUser] = useState<UserData | null>(() => {
-    // Server-side rendering (SSR) check: Next.js mein pehle check karein ke window defined hai
     if (typeof window !== 'undefined') {
       const data = localStorage.getItem('user');
       if (data) {
@@ -27,11 +27,16 @@ export default function DashboardPage() {
     return null;
   });
 
-  // 3. Optional: Agar aap chahte hain ke data synchronize rahe (Sync across tabs)
   useEffect(() => {
     const handleStorageChange = () => {
       const data = localStorage.getItem('user');
-      if (data) setUser(JSON.parse(data));
+      if (data) {
+        try {
+          setUser(JSON.parse(data));
+        } catch (error) {
+          console.error("Failed to parse data on change:", error);
+        }
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -47,16 +52,32 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="bg-white p-8 rounded-xl shadow-sm mb-8 border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-800">
-          Welcome back, {user?.business_name || "Guest"}! 👋
-        </h2>
-        <p className="text-gray-600 mt-2">Manage your FBR e-invoicing and business integrations.</p>
-        <div className="mt-4 inline-block bg-indigo-50 px-4 py-2 rounded-lg">
-          <span className="text-sm font-semibold text-indigo-700">
-            NTN: {user?.ntn || "Not Provided"}
-          </span>
+      <div className="bg-white p-8 rounded-xl shadow-sm mb-8 border border-gray-100 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">
+            Welcome back, {user?.business_name || "Guest"}! 👋
+          </h2>
+          <p className="text-gray-600 mt-2">Manage your FBR e-invoicing and business integrations.</p>
+          <div className="mt-4 inline-block bg-indigo-50 px-4 py-2 rounded-lg">
+            <span className="text-sm font-semibold text-indigo-700">
+              NTN: {user?.ntn || "Not Provided"}
+            </span>
+          </div>
         </div>
+
+        {/* Optimized Logo using next/image with shrink-0 */}
+        {user?.logo && (
+          <div className="shrink-0 ml-4 bg-gray-50 p-2 rounded-xl border border-gray-100 relative w-24 h-24">
+            <Image 
+              src={user.logo} 
+              alt="Business Logo" 
+              fill 
+              className="object-contain rounded-lg p-1"
+              priority 
+              unoptimized 
+            />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

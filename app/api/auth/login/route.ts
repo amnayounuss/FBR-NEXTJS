@@ -11,16 +11,17 @@ interface UserRow extends RowDataPacket {
   email: string;
   password_hash: string;
   business_name: string;
+  ntn: string; // Added NTN
+  logo: string; // Added Logo
 }
 
 export async function POST(req: Request) {
   try {
     const { email, password } = await req.json();
 
-    // Find user with tenant info
-    // [users] ko UserRow[] type di hai taake 'any' ki zaroorat na paray
+    // Query updated to fetch NTN and Logo
     const [users] = await db.query<UserRow[]>(
-      'SELECT u.*, t.business_name FROM users u JOIN tenants t ON u.tenant_id = t.id WHERE u.email = ?',
+      'SELECT u.*, t.business_name, t.ntn, t.logo FROM users u JOIN tenants t ON u.tenant_id = t.id WHERE u.email = ?',
       [email]
     );
 
@@ -43,13 +44,16 @@ export async function POST(req: Request) {
       { expiresIn: '1d' }
     );
 
+    // Response updated to include all fields for Dashboard
     const response = NextResponse.json({
       message: "Login successful",
       user: { 
         id: user.id, 
         email: user.email, 
         tenantId: user.tenant_id, 
-        businessName: user.business_name 
+        business_name: user.business_name, // Changed to match your Dashboard keys
+        ntn: user.ntn,
+        logo: user.logo
       }
     });
 

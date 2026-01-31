@@ -3,82 +3,70 @@ import db from '@/lib/db';
 import jwt from 'jsonwebtoken';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
-// 1. JWT Payload ke liye interface
 interface AuthUser {
-  user_id: number;
-  tenant_id: number;
-  email: string;
+  userId: number;
+  tenantId: number;
 }
 
-// 2. Settings row ke liye interface (RowDataPacket extend karna zaroori hai)
 interface SettingsRow extends RowDataPacket {
+  business_name: string;
+  ntn: string;
+  address: string;
+  contact_email: string;
+  contact_mobile: string;
   fbr_sandbox_api_url: string;
   fbr_sandbox_bearer_token: string;
-  fbr_prod_api_url: string;
-  fbr_prod_bearer_token: string;
+  fbr_prod_api_url: string; // Added Production field
+  fbr_prod_bearer_token: string; // Added Production field
 }
 
-// 3. Request body ke liye interface
-interface SettingsBody {
-  fbr_sandbox_api_url: string;
-  fbr_sandbox_bearer_token: string;
-  fbr_prod_api_url: string;
-  fbr_prod_bearer_token: string;
-}
-
-// Helper function to verify token with proper typing
-const verifyToken = (req: Request): AuthUser => {
-  const token = req.headers.get('authorization')?.split(' ')[1];
+const getAuth = (req: Request) => {
+  const token = req.headers.get('cookie')?.split('token=')[1]?.split(';')[0];
   if (!token) throw new Error("Unauthorized");
-  
-  // jwt.verify ko explicitly AuthUser type mein cast karein
-  return jwt.verify(token, process.env.JWT_SECRET!) as unknown as AuthUser;
+  return jwt.verify(token, process.env.JWT_SECRET || 'secret_123') as AuthUser;
 };
-
-export async function PUT(req: Request) {
-  try {
-    const decoded = verifyToken(req);
-    const body = await req.json() as SettingsBody;
-
-    // ResultSetHeader ka istemal karein UPDATE query ke liye
-    await db.query<ResultSetHeader>(
-      `UPDATE tenants SET 
-       fbr_sandbox_api_url = ?, fbr_sandbox_bearer_token = ?, 
-       fbr_prod_api_url = ?, fbr_prod_bearer_token = ? 
-       WHERE id = ?`,
-      [
-        body.fbr_sandbox_api_url, 
-        body.fbr_sandbox_bearer_token, 
-        body.fbr_prod_api_url, 
-        body.fbr_prod_bearer_token, 
-        decoded.tenant_id
-      ]
-    );
-
-    return NextResponse.json({ message: "Settings Updated" });
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Update failed";
-    return NextResponse.json({ error: errorMessage }, { status: 401 });
-  }
-}
 
 export async function GET(req: Request) {
   try {
-    const decoded = verifyToken(req);
-    
-    // SettingsRow[] ka istemal karein SELECT query ke liye
+    const decoded = getAuth(req);
     const [rows] = await db.query<SettingsRow[]>(
-      "SELECT fbr_sandbox_api_url, fbr_sandbox_bearer_token, fbr_prod_api_url, fbr_prod_bearer_token FROM tenants WHERE id = ?",
-      [decoded.tenant_id]
+      `SELECT business_name, ntn, address, contact_email, contact_mobile, 
+       fbr_sandbox_api_url, fbr_sandbox_bearer_token, 
+       fbr_prod_api_url, fbr_prod_bearer_token 
+       FROM tenants WHERE id = ?`,
+      [decoded.tenantId]
     );
-    
-    if (!rows || rows.length === 0) {
-      return NextResponse.json({ error: "Settings not found" }, { status: 404 });
-    }
+    return NextResponse.json(rows[0] || {});
+  } catch (error) {
+    console.error("GET_SETTINGS_ERROR:", error);
+    return NextResponse.json({ error: "Fetch failed" }, { status: 401 });
+  }
+}
 
-    return NextResponse.json(rows[0]);
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Fetch failed";
-    return NextResponse.json({ error: errorMessage }, { status: 401 });
+export async function POST(req: Request) {
+  try {
+    const decoded = getAuth(req);
+    const body = await req.json();
+
+    await db.query<ResultSetHeader>(
+      `UPDATE tenants SET 
+       business_name = ?, ntn = ?, address = ?, 
+       contact_email = ?, contact_mobile = ?,
+       fbr_sandbox_api_url = ?, fbr_sandbox_bearer_token = ?,
+       fbr_prod_api_url = ?, fbr_prod_bearer_token = ?
+       WHERE id = ?`,
+      [
+        body.business_name, body.ntn, body.address,
+        body.contact_email, body.contact_mobile,
+        body.fbr_sandbox_api_url, body.fbr_sandbox_bearer_token,
+        body.fbr_prod_api_url, body.fbr_prod_bearer_token,
+        decoded.tenantId
+      ]
+    );
+
+    return NextResponse.json({ message: "Settings Updated Successfully" });
+  } catch (error) {
+    console.error("POST_SETTINGS_ERROR:", error);
+    return NextResponse.json({ error: "Update failed" }, { status: 401 });
   }
 }

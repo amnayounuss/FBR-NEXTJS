@@ -17,7 +17,8 @@ export default function AuthPage() {
     ntn: '',
     province: '',
     address: '',
-    contact_mobile: ''
+    contact_mobile: '',
+    logo: '' // Added logo state
   });
 
   // Redirect if already logged in
@@ -28,8 +29,20 @@ export default function AuthPage() {
     }
   }, [router]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.id]: e.target.value });
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { id, value, type } = e.target as HTMLInputElement;
+    
+    // Logo file handling
+    if (type === 'file' && (e.target as HTMLInputElement).files) {
+      const file = (e.target as HTMLInputElement).files![0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData({ ...formData, logo: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setFormData({ ...formData, [id]: value });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,7 +61,8 @@ export default function AuthPage() {
           address: formData.address,
           contact_email: formData.email,
           contact_mobile: formData.contact_mobile,
-          password: formData.password
+          password: formData.password,
+          logo: formData.logo
         };
 
     try {
@@ -62,7 +76,11 @@ export default function AuthPage() {
 
       if (response.ok) {
         if (isLogin) {
-          document.cookie = `token=${result.token}; path=/; max-age=604800; SameSite=Strict`;
+          // Token handling
+          if (result.token) {
+            document.cookie = `token=${result.token}; path=/; max-age=604800; SameSite=Strict`;
+          }
+          // Save FULL user object including NTN and Logo
           localStorage.setItem('user', JSON.stringify(result.user));
           setAlert({ msg: 'Login successful! Redirecting...', type: 'success' });
           
@@ -75,7 +93,6 @@ export default function AuthPage() {
         setAlert({ msg: result.error || 'Something went wrong', type: 'error' });
       }
     } catch (error) {
-      // 'error' ko console mein use kiya taake 'defined but never used' error khatam ho jaye
       console.error("Auth error:", error);
       setAlert({ msg: 'Connection error. Please try again.', type: 'error' });
     } finally {
@@ -84,7 +101,6 @@ export default function AuthPage() {
   };
 
   return (
-    // Updated class: bg-linear-to-br
     <div className="min-h-screen bg-linear-to-br from-indigo-600 to-purple-700 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-8">
         <div className="mb-8 text-center">
@@ -113,6 +129,12 @@ export default function AuthPage() {
                 <option value="Balochistan">Balochistan</option>
                 <option value="ICT">Islamabad</option>
               </select>
+              <input id="contact_mobile" type="text" placeholder="Mobile Number" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900" onChange={handleInputChange} />
+              <div className="space-y-1">
+                <label className="text-xs text-gray-500 px-1">Business Logo</label>
+                <input id="logo" type="file" accept="image/*" className="w-full p-2 border rounded-lg text-sm text-gray-900" onChange={handleInputChange} />
+              </div>
+              <textarea id="address" placeholder="Business Address" required className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900" onChange={handleInputChange}></textarea>
             </>
           )}
           

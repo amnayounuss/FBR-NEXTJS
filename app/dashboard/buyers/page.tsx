@@ -105,7 +105,7 @@ export default function BuyersPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center text-black justify-center p-4 z-50">
           <div className="bg-white p-8 rounded-2xl w-full max-w-md shadow-2xl">
             <h2 className="text-xl font-bold mb-4 text-gray-800">Add New Buyer</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
