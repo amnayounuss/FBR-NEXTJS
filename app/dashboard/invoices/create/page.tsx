@@ -253,7 +253,7 @@ export default function CreateInvoice() {
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.qty} onChange={(e) => updateItem(index, 'qty', Number(e.target.value))} />
                   </div>
-                  <div className="w-[100px] space-y-1">
+                  <div className="w-25 space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.price} onChange={(e) => updateItem(index, 'price', Number(e.target.value))} />
                   </div>
@@ -282,7 +282,7 @@ export default function CreateInvoice() {
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.extraTax} onChange={(e) => updateItem(index, 'extraTax', Number(e.target.value))} />
                   </div>
-                  <div className="flex-grow flex flex-col justify-end items-end min-w-[120px]">
+                  <div className="grow flex flex-col justify-end items-end min-w-30">
                     <label className="text-[10px] font-black text-indigo-600 uppercase tracking-wider mb-1">Row Total</label>
                     <div className="text-lg font-bold text-gray-900">Rs. {(item.qty * item.price).toLocaleString()}</div>
                   </div>
