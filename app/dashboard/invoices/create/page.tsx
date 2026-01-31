@@ -134,7 +134,8 @@ export default function CreateInvoice() {
         toast.success(isDraft ? "Draft Saved!" : "Invoice Submitted to FBR!");
         router.push("/dashboard/invoices");
       } else {
-        toast.error("Failed to save invoice");
+        const errData = await res.json();
+        toast.error(errData.error || "Failed to save invoice");
       }
     } catch (err) {
       console.error("Submit error", err);
@@ -236,11 +237,11 @@ export default function CreateInvoice() {
                       <option value="">-- Select --</option>
                     </select>
                   </div>
-                  <div className="w-[120px] space-y-1">
+                  <div className="w-30 space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">HS Code</label>
                     <input className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.hsCode} onChange={(e) => updateItem(index, 'hsCode', e.target.value)} />
                   </div>
-                  <div className="w-[120px] space-y-1">
+                  <div className="w-30 space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Prod Code</label>
                     <input className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.prodCode} onChange={(e) => updateItem(index, 'prodCode', e.target.value)} />
                   </div>
@@ -252,11 +253,11 @@ export default function CreateInvoice() {
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Qty</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.qty} onChange={(e) => updateItem(index, 'qty', Number(e.target.value))} />
                   </div>
-                  <div className="w-[100px] space-y-1">
+                  <div className="w-25 space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Price</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm outline-none focus:border-indigo-500" value={item.price} onChange={(e) => updateItem(index, 'price', Number(e.target.value))} />
                   </div>
-                  <div className="w-[120px] space-y-1">
+                  <div className="w-30 space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">UOM</label>
                     <select className="w-full border rounded-lg p-2 text-sm outline-none bg-white focus:border-indigo-500" value={item.uoM} onChange={(e) => updateItem(index, 'uoM', e.target.value)}>
                       <option value="U1000069">Pieces</option>
@@ -281,7 +282,7 @@ export default function CreateInvoice() {
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Extra</label>
                     <input type="number" className="w-full border rounded-lg p-2 text-sm text-center outline-none focus:border-indigo-500" value={item.extraTax} onChange={(e) => updateItem(index, 'extraTax', Number(e.target.value))} />
                   </div>
-                  <div className="flex-grow flex flex-col justify-end items-end min-w-[120px]">
+                  <div className="grow flex flex-col justify-end items-end min-w-30">
                     <label className="text-[10px] font-black text-indigo-600 uppercase tracking-wider mb-1">Row Total</label>
                     <div className="text-lg font-bold text-gray-900">Rs. {(item.qty * item.price).toLocaleString()}</div>
                   </div>
