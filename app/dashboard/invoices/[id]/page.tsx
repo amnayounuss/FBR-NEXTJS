@@ -25,7 +25,6 @@ interface Item {
   extraTax: number;
 }
 
-// Interface for Database response mapping
 interface DbInvoiceItem {
   hs_code: string;
   product_code: string;
@@ -37,6 +36,11 @@ interface DbInvoiceItem {
   discount?: number | string;
   further_tax?: number | string;
   extra_tax?: number | string;
+}
+
+interface BackendResponse {
+  error?: string;
+  message?: string;
 }
 
 export default function UpdateInvoice({ params }: { params: Promise<{ id: string }> }) {
@@ -57,14 +61,17 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
   useEffect(() => {
     const loadData = async () => {
       try {
-        const buyerRes = await fetch("/api/buyers");
+        const [buyerRes, invRes] = await Promise.all([
+          fetch("/api/buyers"),
+          fetch(`/api/invoices/${resolvedParams.id}`)
+        ]);
+
         const buyerData = await buyerRes.json();
         if (Array.isArray(buyerData)) setBuyers(buyerData);
 
-        const res = await fetch(`/api/invoices/${resolvedParams.id}`);
-        const data = await res.json();
+        const data = await invRes.json();
 
-        if (res.ok) {
+        if (invRes.ok) {
           setInvoiceDate(data.invoice_date.split('T')[0]);
           setInvoiceNumber(data.invoice_ref_no);
           setStatus(data.status);
@@ -116,6 +123,7 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
     setSubmitting(true);
 
     const buyer = buyers.find(b => b.id.toString() === selectedBuyerId);
+    
     const payload = {
       invoiceType: invoiceType === "2" ? "Sale Invoice" : "Purchase Invoice",
       invoiceDate,
@@ -141,11 +149,13 @@ export default function UpdateInvoice({ params }: { params: Promise<{ id: string
         body: JSON.stringify(payload),
       });
 
+      const resData = (await res.json()) as BackendResponse;
+
       if (res.ok) {
-        toast.success(isDraft ? "Draft Updated Successfully!" : "Invoice Submitted to FBR!");
+        toast.success(isDraft ? "Draft Updated Successfully!" : "Invoice Successfully Submitted to FBR!");
         router.push("/dashboard/invoices");
       } else {
-        toast.error("Failed to update invoice");
+        toast.error(resData.error || resData.message || "Failed to process invoice");
       }
     } catch (error) {
       console.error("Submit Error:", error);
